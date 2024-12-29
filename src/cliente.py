@@ -15,12 +15,15 @@ def lista_dispositivos(json_lista_dispositivos):
     
     list=json_lista_dispositivos["dispositivos"]
     tam=len(list)
-    i=0
-    print("Selecione um dispositivo")
-    for i in range(tam):
-        print(f"{i}) {list[i]['nome']}-{list[i]['id']}\n")
-    x=int(input())
-    return list[x]["nome"],list[x]["id"]
+    if tam==0:
+        print("Ainda não existem dispositivos conectados na rede")
+    else:
+        i=0
+        print("Selecione um dispositivo")
+        for i in range(tam):
+            print(f"{i}) {list[i]['nome']}-{list[i]['id']}\n")
+        x=int(input())
+        return list[x]["nome"],list[x]["id"]
 
 def lista_opcoes_de_acoes():
     print("1) Chamar uma função do dispositivo selecionado")
@@ -88,9 +91,12 @@ def main():
         r_json=json.loads(r_json)
         #o que eu espero receber aqui: {"dispositivos":[{"nome":"lampada","id":"01"},{"nome":"","id":""},{"nome":"","id":""},{"nome":"","id":""}]}
         dispositivo_escolhido , id_dispositivo_escolhido = lista_dispositivos(r_json) #retorna o nome e id do dispositivo escolhida
-        os.system('cls')
-        acao_escolhida=lista_opcoes_de_acoes()# retorna a ação escolhida pelo usuário: renomear (dispositivo), status(ver o status), função (chamar uma função)
-        os.system('cls')
+        if(dispositivo_escolhido==0 and id_dispositivo_escolhido==0):
+            pass
+        else:
+            os.system('cls')
+            acao_escolhida=lista_opcoes_de_acoes()# retorna a ação escolhida pelo usuário: renomear (dispositivo), status(ver o status), função (chamar uma função)
+            os.system('cls')
         
         if acao_escolhida=='função':
             mensagem = {"comando":"funcionalidades","dispositivo":{"nome":f"{dispositivo_escolhido}","id":f"{id_dispositivo_escolhido}"}}
@@ -111,7 +117,6 @@ def main():
             r_json = client_sock.recv(1024)
             r_json=r_json.decode('utf-8')
             r_json=json.loads(r_json)
-            #o que eu espero receber aqui:{"chave":"valor",....}
             apresenta_status(r_json)
             input()
             os.system('cls')
@@ -123,20 +128,26 @@ def main():
             client_sock.settimeout(None)
             r_json = client_sock.recv(1024)
             r_json=r_json.decode('utf-8')
-            #o que eu espero receber aqui:{"chave":"valor",....}
+            r_json=json.loads(r_json)
             apresenta_status(r_json) 
+            input()
+            os.system('cls')
         
         elif acao_escolhida=='renomear':
             novo_id_escolhido=input("Digite o novo id para o dispositivo escolhido:")
-            
             mensagem = {"comando":"renomear","dispositivo":{"nome":f"{dispositivo_escolhido}","id":f"{id_dispositivo_escolhido}"},"novo_id":f"{novo_id_escolhido}"}
+            print("mensagem que o cliente envia para o gateway na ação renomear")
+            print(mensagem)
+            input()
             mensagem_json = json.dumps(mensagem).encode('utf-8')
             client_sock.sendall(mensagem_json)
             client_sock.settimeout(None)
             r_json = client_sock.recv(1024)
             r_json=r_json.decode('utf-8')
-            #o que eu espero receber aqui:{"chave":"valor",....}
+            r_json=json.loads(r_json)
             apresenta_status(r_json)
+            input()
+            os.system('cls')
                        
 
     client_sock.close()

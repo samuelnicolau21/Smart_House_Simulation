@@ -99,8 +99,27 @@ def aguardando_comandos(sock_lampada):
                      ,{"luminosidade": luminosidade}]
                 }
             sock_lampada.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_PORT))
-            print(f"Atualizando o status da lampada para o gateway")  
-                                    
+            print(f"Atualizando o status da lampada para o gateway")
+        
+        elif mensagem_json.get("comando")=="status":
+            resposta_json = {
+                "status":[
+                    {"tipo":"atualização"},{"nome":"lampada"},{"id":f"{LAMP_ID}"},
+                    {"estado da lampada": f"{estado_da_lampada}"},{"cor da lampada": f"{cor_da_lampada}"}
+                     ,{"luminosidade": luminosidade}]
+                }
+            sock_lampada.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_PORT))
+            print(f"Atualizando o status da lampada para o gateway") 
+        elif mensagem_json.get("comando")=="renomear":
+            LAMP_ID=mensagem_json.get("novo_id")
+            resposta_json = {
+                "status":[
+                    {"tipo":"atualização"},{"nome":"lampada"},{"id":f"{LAMP_ID}"},
+                    {"estado da lampada": f"{estado_da_lampada}"},{"cor da lampada": f"{cor_da_lampada}"}
+                    ,{"luminosidade": luminosidade}]
+                }
+            sock_lampada.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_PORT))
+            print(f"Atualizando o status da lampada para o gateway")   
 #funcionalidades da lampada  
 
 def ligar_desligar():
