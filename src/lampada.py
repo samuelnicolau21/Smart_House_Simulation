@@ -4,7 +4,7 @@ import json
 
 
 
-MULTICAST_GROUP = '224.1.1.1'
+MULTICAST_GROUP = '224.1.1.2'
 MULTCAST_PORT = 5007
 
 GATEWAY_IP=''
@@ -26,6 +26,7 @@ def entrar_no_grupo(sock, grp):
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
 def iniciar_lampada():
+    global GATEWAY_IP, GATEWAY_PORT
     # Criar o socket UDP
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -47,13 +48,7 @@ def iniciar_lampada():
         
         print(f"Mensagem recebida de {endereco}: {mensagem_json}")
         if mensagem_json.get("comando") == "descobrir":
-            resposta_json = {
-                "nome":"lampada",
-                "id": LAMP_ID,
-                "status": "pronto",
-                "funcionalidades": ["ligar/desligar", "brilho", "cor"],
-                "endereco":[f"{LAMPADA_IP}",f"{LAMPADA_PORT}"]
-            }
+            resposta_json = {"tipo":"descoberta","nome":"lampada","id": LAMP_ID,"status": "pronto","endereco":[f"{LAMPADA_IP}",f"{LAMPADA_PORT}"],"funcionalidades": [ {"nome":"ligar/desligar","parametros":[]},{"nome":"brilho","parametros":[{"nome":"valor do brilho","tipo":"inteiro"}]},{"nome":"cor","parametros":[{"nome":"cor da lâmpada","tipo":"String"}]}]}
             endereco_completo_do_gateway=mensagem_json.get("enderecoGateway")
             GATEWAY_IP, GATEWAY_PORT = endereco_completo_do_gateway
             GATEWAY_PORT = int(GATEWAY_PORT)
@@ -62,46 +57,74 @@ def iniciar_lampada():
             break
     
     aguardando_comandos(sock_lampada)      
-            
-            
-def ligar_desligar():
-    if estado_da_lampada == 'desligado':
-        estado_da_lampada='ligado'
-    else:
-        estado_da_lampada = 'desligado'
 
-def brilho(valor):
-    if valor>=0 and valor<=100:
-        luminosidade = valor
-    else:
-        print("o valor de brilho não é válido")
-
-def cor(cor_escolhida):
-    cor=cor_escolhida;
- 
 def aguardando_comandos(sock_lampada):
-
-    
+    global GATEWAY_IP, GATEWAY_PORT,LAMP_ID,estado_da_lampada,cor_da_lampada,luminosidade
     while True:
         dados, endereco = sock_lampada.recvfrom(1024)
         mensagem_json = json.loads(dados.decode('utf-8'))
         
         print(f"Mensagem recebida de {endereco}: {mensagem_json}")
+        
         if mensagem_json.get("comando") == "ligar/desligar":
             ligar_desligar()
             resposta_json = {
-                "estado da lampada": f"{estado_da_lampada}",
-                "cor da lampada": f"{cor_da_lampada}",
-                "luminosidade": luminosidade
-            }
+                "status":[
+                    {"tipo":"atualização"},{"nome":"lampada"},{"id":f"{LAMP_ID}"},
+                    {"estado da lampada": f"{estado_da_lampada}"},{"cor da lampada": f"{cor_da_lampada}"}
+                     ,{"luminosidade": luminosidade}]
+                }
             
             sock_lampada.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_PORT))
             print(f"Atualizando o status da lampada para o gateway")
-        break
+       
+        elif mensagem_json.get("comando")=="brilho":
+            brilho(int(mensagem_json.get("parametros")[0]))
+            resposta_json = {
+                "status":[
+                    {"tipo":"atualização"},{"nome":"lampada"},{"id":f"{LAMP_ID}"},
+                    {"estado da lampada": f"{estado_da_lampada}"},{"cor da lampada": f"{cor_da_lampada}"}
+                     ,{"luminosidade": luminosidade}]
+                }
+            
+            sock_lampada.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_PORT))
+            print(f"Atualizando o status da lampada para o gateway")   
+       
+        elif mensagem_json.get("comando")=="cor":
+            cor(mensagem_json.get("parametros")[0])
+            resposta_json = {
+                "status":[
+                    {"tipo":"atualização"},{"nome":"lampada"},{"id":f"{LAMP_ID}"},
+                    {"estado da lampada": f"{estado_da_lampada}"},{"cor da lampada": f"{cor_da_lampada}"}
+                     ,{"luminosidade": luminosidade}]
+                }
+            sock_lampada.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_PORT))
+            print(f"Atualizando o status da lampada para o gateway")  
+                                    
+#funcionalidades da lampada  
 
+def ligar_desligar():
+    global estado_da_lampada
+    if estado_da_lampada == 'desligado':
+        estado_da_lampada='ligado'
+    else:
+        estado_da_lampada = 'desligado'
+
+def brilho(valor_do_brilho):
+    global luminosidade
+    if valor_do_brilho>=0 and valor_do_brilho<=100:
+        luminosidade = valor_do_brilho
+    else:
+        print("o valor de brilho não é válido")
+
+def cor(cor_escolhida):
+    global cor_da_lampada
+    cor_da_lampada=cor_escolhida
+    #cor_da_lampada="azul"
+       
 
 if __name__ == "__main__":
-    print("digite o nome da lampada:\n")
+    print("Digite o nome da lampada:\n")
     LAMP_ID=input()
     iniciar_lampada()
     
