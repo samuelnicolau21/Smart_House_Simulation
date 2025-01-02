@@ -149,7 +149,6 @@ def main():
                     r_json = client_sock.recv(1024)
                     r_json=r_json.decode('utf-8')
                     #o que eu espero receber aqui:{"funcionalidades":[{"nome":"ligar/desligar","parametros":[{"nome":"","tipo":"",...}]} , {"nome":"brilho","parametros":[{"nome":"","tipo":"",...}]},...}
-                    
                     r_json=json.loads(r_json)            
                     funcionalidade_escolhida ,lista_de_parametros_preenchida =listar_funcionalidades(r_json)#retornar o nome da funcionalidade escolhida e uma lista de parâmetros preenchidos para aquela funcionalidade
                     while (funcionalidade_escolhida=="" and lista_de_parametros_preenchida==""):
@@ -210,7 +209,7 @@ def main():
                                   
                         
         except:
-            print("Falha ao enviar mensagem para o gateway/cliente")
+            print("Falha ao enviar mensagem para o gateway")
             print("programa encerrando...")
             time.sleep(5) 
             break
