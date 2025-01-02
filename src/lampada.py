@@ -1,6 +1,7 @@
 import socket
 import struct
 import json
+import os
 
 
 
@@ -48,7 +49,7 @@ def iniciar_lampada():
         
         print(f"Mensagem recebida de {endereco}: {mensagem_json}")
         if mensagem_json.get("comando") == "descobrir":
-            resposta_json = {"tipo":"descoberta","nome":"lampada","id": LAMP_ID,"status": "pronto","endereco":[f"{LAMPADA_IP}",f"{LAMPADA_PORT}"],"funcionalidades": [ {"nome":"ligar/desligar","parametros":[]},{"nome":"brilho","parametros":[{"nome":"valor do brilho","tipo":"inteiro"}]},{"nome":"cor","parametros":[{"nome":"cor da lâmpada","tipo":"String"}]}]}
+            resposta_json = {"tipo":"descoberta","nome":"lampada","id": LAMP_ID,"status": "pronto","endereco":[f"{LAMPADA_IP}",f"{LAMPADA_PORT}"],"funcionalidades": [ {"nome":"ligar/desligar","parametros":[]},{"nome":"brilho","parametros":[{"nome":"valor do brilho","tipo":"int"}]},{"nome":"cor","parametros":[{"nome":"cor da lâmpada","tipo":"vermelho,verde,amarelo,azul,branco,roxo"}]}]}
             endereco_completo_do_gateway=mensagem_json.get("enderecoGateway")
             GATEWAY_IP, GATEWAY_PORT = endereco_completo_do_gateway
             GATEWAY_PORT = int(GATEWAY_PORT)
@@ -63,11 +64,12 @@ def aguardando_comandos(sock_lampada):
     while True:
         dados, endereco = sock_lampada.recvfrom(1024)
         mensagem_json = json.loads(dados.decode('utf-8'))
-        
         print(f"Mensagem recebida de {endereco}: {mensagem_json}")
         
         if mensagem_json.get("comando") == "ligar/desligar":
+            os.system("cls")
             ligar_desligar()
+            mostrar_status()
             resposta_json = {
                 "status":[
                     {"tipo":"atualização"},{"nome":"lampada"},{"id":f"{LAMP_ID}"},
@@ -79,7 +81,9 @@ def aguardando_comandos(sock_lampada):
             print(f"Atualizando o status da lampada para o gateway")
        
         elif mensagem_json.get("comando")=="brilho":
+            os.system("cls")
             brilho(int(mensagem_json.get("parametros")[0]))
+            mostrar_status()
             resposta_json = {
                 "status":[
                     {"tipo":"atualização"},{"nome":"lampada"},{"id":f"{LAMP_ID}"},
@@ -91,7 +95,9 @@ def aguardando_comandos(sock_lampada):
             print(f"Atualizando o status da lampada para o gateway")   
        
         elif mensagem_json.get("comando")=="cor":
+            os.system("cls")
             cor(mensagem_json.get("parametros")[0])
+            mostrar_status()
             resposta_json = {
                 "status":[
                     {"tipo":"atualização"},{"nome":"lampada"},{"id":f"{LAMP_ID}"},
@@ -102,6 +108,8 @@ def aguardando_comandos(sock_lampada):
             print(f"Atualizando o status da lampada para o gateway")
         
         elif mensagem_json.get("comando")=="status":
+            os.system("cls")
+            mostrar_status()
             resposta_json = {
                 "status":[
                     {"tipo":"atualização"},{"nome":"lampada"},{"id":f"{LAMP_ID}"},
@@ -110,8 +118,11 @@ def aguardando_comandos(sock_lampada):
                 }
             sock_lampada.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_PORT))
             print(f"Atualizando o status da lampada para o gateway") 
+        
         elif mensagem_json.get("comando")=="renomear":
+            os.system("cls")
             LAMP_ID=mensagem_json.get("novo_id")
+            mostrar_status()
             resposta_json = {
                 "status":[
                     {"tipo":"atualização"},{"nome":"lampada"},{"id":f"{LAMP_ID}"},
@@ -120,6 +131,7 @@ def aguardando_comandos(sock_lampada):
                 }
             sock_lampada.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_PORT))
             print(f"Atualizando o status da lampada para o gateway")   
+
 #funcionalidades da lampada  
 
 def ligar_desligar():
@@ -139,8 +151,13 @@ def brilho(valor_do_brilho):
 def cor(cor_escolhida):
     global cor_da_lampada
     cor_da_lampada=cor_escolhida
-    #cor_da_lampada="azul"
        
+def mostrar_status():
+    global LAMP_ID,estado_da_lampada,cor_da_lampada,luminosidade
+    print(f"id:{LAMP_ID}")
+    print(f"estado:{estado_da_lampada}")
+    print(f"cor:{cor_da_lampada}")
+    print(f"luminosidade:{luminosidade}")
 
 if __name__ == "__main__":
     print("Digite o nome da lampada:\n")
