@@ -19,7 +19,7 @@ CLIENT_PORT=0
  
 
 thread_pausada=False
-
+lock = threading.Lock()
 #classe para guardar informações de cada dispositivo no grupo 
 class Dispositivo:
     nome=''
@@ -159,22 +159,22 @@ def adcionar_novos_dispositivos(sock_gateway,sock_multicast):
     global ldd
     #print(f"Gateway escutando respostas no endereço {IP_GATEWAY}:{PORT}")
     while True:
-        time.sleep(2)
         if not thread_pausada:
-            #print("enviando multicast")
-            enviar_multicast(sock_multicast)
-            sock_gateway.settimeout(10)
-            try:
-                dados, endereco = sock_gateway.recvfrom(1024)
-                r_json = json.loads(dados.decode('utf-8'))
-                if(r_json.get("tipo")=='descoberta'):
-                    #print(f"Resposta recebida de {endereco}: {r_json}")
-                    ip,porta=r_json.get("endereco")
-                    ldd.dispositivos.append( Dispositivo(r_json.get("nome"),r_json.get("id"),ip,porta,r_json.get("funcionalidades")) )
-                    print(f"Dispositivo:{r_json.get('nome')} de ID:{r_json.get('id')} foi adcionado a lista de dispositivos")
-            except:
-                    #print("Tempo limite atingido. Nenhuma resposta recebida.") 
-                    pass
+            with lock:
+                #print("enviando multicast")
+                enviar_multicast(sock_multicast)
+                sock_gateway.settimeout(10)
+                try:
+                    dados, endereco = sock_gateway.recvfrom(1024)
+                    r_json = json.loads(dados.decode('utf-8'))
+                    if(r_json.get("tipo")=='descoberta'):
+                        #print(f"Resposta recebida de {endereco}: {r_json}")
+                        ip,porta=r_json.get("endereco")
+                        ldd.dispositivos.append( Dispositivo(r_json.get("nome"),r_json.get("id"),ip,porta,r_json.get("funcionalidades")) )
+                        print(f"Dispositivo:{r_json.get('nome')} de ID:{r_json.get('id')} foi adcionado a lista de dispositivos")
+                except:
+                        #print("Tempo limite atingido. Nenhuma resposta recebida.") 
+                        pass
 
 def escuta_cliente(sock_gateway):
     global CLIENT_IP,CLIENT_PORT,GATEWAY_IP,GATEWAY_CLIENT_PORT,thread_pausada,ldd
@@ -216,67 +216,70 @@ def escuta_cliente(sock_gateway):
                 ip,porta=ldd.ip_e_porta(r_json["dispositivo"]["nome"],r_json["dispositivo"]["id"])
                 parametros=r_json.get('parametros')
                 r_json={"comando":f"{r_json['funcionalidade']}","parametros":parametros}
-                try:
-                    print("vou tentar enviar mensagem para o dispositivo agora")
-                    sock_gateway.sendto(json.dumps(r_json).encode('utf-8'), (ip,int(porta)))
-                    print("mensagem enviada para o dispositivo")
-                    sock_gateway.settimeout(10)
-                    dados, endereco = sock_gateway.recvfrom(1024)
-                    r_json = json.loads(dados.decode('utf-8'))
-                    if r_json["status"][0]["tipo"]=='atualização':
-                        client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                with lock:
+                    try:
+                        print("vou tentar enviar mensagem para o dispositivo agora")
+                        sock_gateway.sendto(json.dumps(r_json).encode('utf-8'), (ip,int(porta)))
+                        print("mensagem enviada para o dispositivo")
+                        sock_gateway.settimeout(10)
+                        dados, endereco = sock_gateway.recvfrom(1024)
+                        r_json = json.loads(dados.decode('utf-8'))
+                        if r_json["status"][0]["tipo"]=='atualização':
+                            client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                            thread_pausada=False
+                            print("Deu certo fazer o envio e receber uma resposta do dispositivo")
+                   # except socket.timeout:
+                    except:
+                        print("Tempo limite esgotado. Dispositivo não respondeu a solicitação.")  
                         thread_pausada=False
-                        print("Deu certo fazer o envio e receber uma resposta do dispositivo")
-               # except socket.timeout:
-                except:
-                    print("Tempo limite esgotado. Dispositivo não respondeu a solicitação.")  
-                    thread_pausada=False
-                    r_json = {"tipo":"erro","erro":"O dispositivo ficou inacessível. Por gentileza, tente novamente mais tarde."}
-                    client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                        r_json = {"tipo":"erro","erro":"O dispositivo ficou inacessível. Por gentileza, tente novamente mais tarde."}
+                        client_sock.sendall(json.dumps(r_json).encode('utf-8'))
 
             
             elif r_json.get("comando")=="status":
                 thread_pausada=True
                 ip,porta=ldd.ip_e_porta(r_json["dispositivo"]["nome"],r_json["dispositivo"]["id"])
                 r_json={"comando":"status"}
-                try:
-                    print("vou tentar enviar mensagem para o dispositivo agora")                    
-                    sock_gateway.sendto(json.dumps(r_json).encode('utf-8'), (ip,int(porta)))
-                    print("mensagem enviada para o dispositivo")
-                    sock_gateway.settimeout(10)   
-                    dados, endereco = sock_gateway.recvfrom(1024)
-                    r_json = json.loads(dados.decode('utf-8'))
-                    if r_json["status"][0]["tipo"]=='atualização':
+                with lock:
+                    try:
+                        print("vou tentar enviar mensagem para o dispositivo agora")                    
+                        sock_gateway.sendto(json.dumps(r_json).encode('utf-8'), (ip,int(porta)))
+                        print("mensagem enviada para o dispositivo")
+                        sock_gateway.settimeout(10)   
+                        dados, endereco = sock_gateway.recvfrom(1024)
+                        r_json = json.loads(dados.decode('utf-8'))
+                        if r_json["status"][0]["tipo"]=='atualização':
+                            client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                            thread_pausada=False
+                   # except socket.timeout:
+                    except:
+                        print("Tempo limite esgotado. Dispositivo não respondeu a solicitação.")  
+                        thread_pausada=False 
+                        r_json = {"tipo":"erro","erro":"O dispositivo ficou inacessível. Por gentileza, tente novamente mais tarde."}
                         client_sock.sendall(json.dumps(r_json).encode('utf-8'))
-                        thread_pausada=False
-               # except socket.timeout:
-                except:
-                    print("Tempo limite esgotado. Dispositivo não respondeu a solicitação.")  
-                    thread_pausada=False 
-                    r_json = {"tipo":"erro","erro":"O dispositivo ficou inacessível. Por gentileza, tente novamente mais tarde."}
-                    client_sock.sendall(json.dumps(r_json).encode('utf-8'))
                 
             
             elif r_json.get("comando")=="renomear":
                 ldd.atualizar_id_dispositivo_gateway(r_json["dispositivo"]["nome"],r_json["dispositivo"]["id"],r_json["novo_id"])
                 thread_pausada=True
                 ip,porta=ldd.ip_e_porta(r_json["dispositivo"]["nome"],r_json["novo_id"])
-                try:
-                    print("enviando mensagem para o dispositivo")
-                    sock_gateway.sendto(json.dumps(r_json).encode('utf-8'), (ip,int(porta)))
-                    print("mensagem enviada para o dispositivo")
-                    sock_gateway.settimeout(10)
-                    dados, endereco = sock_gateway.recvfrom(1024)
-                    r_json = json.loads(dados.decode('utf-8'))
-                    if r_json["status"][0]["tipo"]=='atualização':
-                        client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                with lock:
+                    try:
+                        print("enviando mensagem para o dispositivo")
+                        sock_gateway.sendto(json.dumps(r_json).encode('utf-8'), (ip,int(porta)))
+                        print("mensagem enviada para o dispositivo")
+                        sock_gateway.settimeout(10)
+                        dados, endereco = sock_gateway.recvfrom(1024)
+                        r_json = json.loads(dados.decode('utf-8'))
+                        if r_json["status"][0]["tipo"]=='atualização':
+                            client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                            thread_pausada=False
+                   # except socket.timeout:
+                    except:
+                        print("Tempo limite esgotado. Dispositivo não respondeu a solicitação.")  
                         thread_pausada=False
-               # except socket.timeout:
-                except:
-                    print("Tempo limite esgotado. Dispositivo não respondeu a solicitação.")  
-                    thread_pausada=False
-                    r_json = {"tipo":"erro","erro":"O dispositivo ficou inacessível. Por gentileza, tente novamente mais tarde."}
-                    client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                        r_json = {"tipo":"erro","erro":"O dispositivo ficou inacessível. Por gentileza, tente novamente mais tarde."}
+                        client_sock.sendall(json.dumps(r_json).encode('utf-8'))
     
         except:
             print("O cliente ficou inacessível")
