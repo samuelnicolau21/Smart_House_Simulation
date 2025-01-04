@@ -3,228 +3,210 @@ import json
 import os
 import time
 
+# Configurações do Gateway e Cliente
+GATEWAY_IP = '192.168.0.49'
+GATEWAY_PORT = 5010
+CLIENT_PORT = 5009
+CLIENT_IP = ''
 
-GATEWAY_IP='192.168.1.5'
-GATEWAY_PORT=5010
-
-CLIENT_PORT=5009
-CLIENT_IP=''
-
-def lista_dispositivos(json_lista_dispositivos):
-    list=json_lista_dispositivos["dispositivos"]
-    tam=len(list)
-    if tam==0:
-        print("Ainda não existem dispositivos conectados na rede...")
-        time.sleep(2)
-        os.system('cls')
-        return "",""
-    else:
-        i=0
-        print("Selecione um dispositivo")
-        for i in range(tam):
-            print(f"{i}) {list[i]['nome']}-{list[i]['id']}\n")
-        try:
-            x=int(input())
-            while (x>tam-1 or x<0):
-                print("Digite uma opção válida")
-                x=int(input())
-        except:
-            print("Você digitou uma opção inválida")
-            return "",""
-        return list[x]["nome"],list[x]["id"]
-    
-def lista_opcoes_de_acoes():
-    print("1) Chamar uma função do dispositivo selecionado")
-    print("2) Renomear o id do dispositivo selecionado")
-    print("3) Ver o status do dispositivo selecionado")
-    x=""
-    while(x!='1' or x!='1' or x!='3'):
-        print("Digite uma opção válida")
-        x=input()
-        if x=='1':
-            return "função"
-        elif x=='2':
-            return "renomear"
-        elif x=='3':
-            return "status"  
-              
-def listar_funcionalidades(json_lista_funcionalidades):
-    list=json_lista_funcionalidades["funcionalidades"]
-    tam=len(list)
-    if tam is None or tam==0:
-        print("a lista de funcionalidades para esse dispositivo está vaiza pois o dispositivo se desconectou")
-        return "-1","" 
-    i=0
-    print("Selecione uma funcionalidade\n")
-    for i in range(tam):
-        print(f"{i}) {list[i]['nome']}")
-    try:
-        x=int(input())
-        while(x>tam-1 and x<0):
-            print("Digite uma opção válida")
-            x=int(input())  
-    except:
-        print("Você digitou uma opção inválida")
-        time.sleep(2)
-        return "",""
-        
-    
-    nome_da_funcionalidade_escolhida=list[x]["nome"]
-    list_2=list[x]["parametros"]
-    tam_2=len(list_2)
-    parametros=[]
-    i=0
-    for i in range(tam_2):
-        print(f"Digite um valor para: {list_2[i]['nome']} ({list_2[i]['tipo']})\n")
-        x=input()
-        try:
-            if list_2[i]['tipo']=='int':
-                aux=int(x)
-                
-            elif list_2[i]['tipo']=='str':
-                aux=str(x)
-                
-            else:
-                #tirando os espaços da string
-                string_sem_speaço=list_2[i]['tipo'].replace(" ", "")
-                #transformando a string em uma lista de strings
-                lista_de_string=string_sem_speaço.split(',')
-                if x in lista_de_string:
-                    pass
-                else:
-                    print("Você digitou uma valor inválido para o parâmetro da funcionalidade escolhida")
-                    time.sleep(2)
-                    return "","" 
-        except:
-            print("Você digitou uma valor inválido para o parâmetro da funcionalidade escolhida")
-            time.sleep(2)
-            return "",""
-        parametros.append(x)  
-    
-    return nome_da_funcionalidade_escolhida, parametros
-
-def apresenta_status(json_status):
-    list=json_status["status"]
-    for tupla in list:
-        for chave, valor in tupla.items():
-            print(f"{chave}: {valor}")
-
-def main():
-    global CLIENT_PORT,CLIENT_IP,GATEWAY_IP,GATEWAY_PORT
-    
-    #cria socket do cliente
+def conectar():
+    """
+    Estabelece a conexão com o servidor e retorna o socket conectado.
+    """
     client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     client_sock.bind(('', CLIENT_PORT))
-    
-    #descobrindo o ip do cliente
-    CLIENT_IP,CLIENT_PORT=client_sock.getsockname()
-    CLIENT_IP = socket.gethostbyname(socket.gethostname())
-    
+
     try:
-        #tentando se conectar com o scoket do gateway
         client_sock.connect((GATEWAY_IP, GATEWAY_PORT))
-    except:
-        print("falha ao tentar se conectar com o gateway.")
-        print("programa encerrando...")
-        time.sleep(5) 
+        print("Conexão estabelecida com sucesso.")
+        return client_sock
+    except Exception as e:
+        print(f"Erro ao conectar ao servidor: {e}")
+        return None
+    
+def desconectar(client_sock):
+    """
+    Encerra a conexão com o servidor.
+    """
+    if client_sock:
+        client_sock.close()
+        print("Conexão encerrada com sucesso.")
+
+
+def lista_dispositivos(json_lista_dispositivos):
+    """
+    Exibe os dispositivos conectados na rede e permite ao usuário selecionar um deles.
+    Retorna o nome e o ID do dispositivo selecionado.
+    """
+    dispositivos = json_lista_dispositivos.get("dispositivos", [])
+    if not dispositivos:
+        print("Ainda não existem dispositivos conectados na rede...")
+        time.sleep(2)
+        os.system('cls')
+        return "", ""
+
+    print("Selecione um dispositivo:")
+    for i, dispositivo in enumerate(dispositivos):
+        print(f"{i}) {dispositivo['nome']} - {dispositivo['id']}")
+
+    try:
+        escolha = int(input())
+        while escolha < 0 or escolha >= len(dispositivos):
+            print("Digite uma opção válida")
+            escolha = int(input())
+    except ValueError:
+        print("Você digitou uma opção inválida")
+        return "", ""
+
+    dispositivo = dispositivos[escolha]
+    return dispositivo["nome"], dispositivo["id"]
+
+def lista_opcoes_de_acoes():
+    """
+    Exibe as opções de ações disponíveis para o dispositivo selecionado.
+    Retorna a ação escolhida pelo usuário.
+    """
+    acoes = {
+        "1": "função",
+        "2": "renomear",
+        "3": "status"
+    }
+
+    print("Selecione uma ação:")
+    print("1) Chamar uma função do dispositivo selecionado")
+    print("2) Renomear o ID do dispositivo selecionado")
+    print("3) Ver o status do dispositivo selecionado")
+
+    while True:
+        escolha = input("Digite uma opção válida: ")
+        if escolha in acoes:
+            return acoes[escolha]
+
+def listar_funcionalidades(json_lista_funcionalidades):
+    """
+    Exibe as funcionalidades do dispositivo e permite ao usuário selecionar uma.
+    Retorna o nome da funcionalidade e seus parâmetros preenchidos.
+    """
+    funcionalidades = json_lista_funcionalidades.get("funcionalidades", [])
+
+    if not funcionalidades:
+        print("A lista de funcionalidades para esse dispositivo está vazia ou o dispositivo se desconectou.")
+        return "-1", ""
+
+    print("Selecione uma funcionalidade:")
+    for i, funcionalidade in enumerate(funcionalidades):
+        print(f"{i}) {funcionalidade['nome']}")
+
+    try:
+        escolha = int(input())
+        while escolha < 0 or escolha >= len(funcionalidades):
+            print("Digite uma opção válida")
+            escolha = int(input())
+    except ValueError:
+        print("Você digitou uma opção inválida")
+        time.sleep(2)
+        return "", ""
+
+    funcionalidade = funcionalidades[escolha]
+    parametros = []
+
+    for parametro in funcionalidade["parametros"]:
+        while True:
+            try:
+                valor = input(f"Digite um valor para {parametro['nome']} ({parametro['tipo']}): ")
+                if parametro['tipo'] == 'int':
+                    parametros.append(int(valor))
+                elif parametro['tipo'] == 'str':
+                    parametros.append(str(valor))
+                else:
+                    opcoes = parametro['tipo'].replace(" ", "").split(',')
+                    if valor not in opcoes:
+                        raise ValueError("Valor inválido")
+                    parametros.append(valor)
+                break
+            except ValueError:
+                print("Você digitou um valor inválido. Tente novamente.")
+
+    return funcionalidade["nome"], parametros
+
+def apresenta_status(json_status):
+    """
+    Exibe o status do dispositivo com base no JSON recebido e aguarda interação do usuário para continuar.
+    """
+    status = json_status.get("status", [])
+    for item in status:
+        for chave, valor in item.items():
+            print(f"{chave}: {valor}")
+    input("Pressione Enter para continuar...")
+
+def enviar_e_receber(client_sock, mensagem):
+    """
+    Envia uma mensagem JSON ao servidor e recebe a resposta.
+    """
+    try:
+        mensagem_json = json.dumps(mensagem).encode('utf-8')
+        client_sock.sendall(mensagem_json)
+        resposta = client_sock.recv(1024)
+        return json.loads(resposta.decode('utf-8'))
+    except Exception as e:
+        print(f"Erro na comunicação: {e}")
+        return {}
+
+def main():
+    global CLIENT_PORT, CLIENT_IP, GATEWAY_IP, GATEWAY_PORT
+
+    client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    client_sock.bind(('', CLIENT_PORT))
+
+    CLIENT_IP = socket.gethostbyname(socket.gethostname())
+
+    try:
+        client_sock.connect((GATEWAY_IP, GATEWAY_PORT))
+    except Exception as e:
+        print(f"Falha ao conectar com o gateway: {e}")
+        print("Programa encerrando...")
+        time.sleep(5)
         client_sock.close()
         return
-    
-    while True:
-        time.sleep(1)
-        mensagem = {"comando":"dispositivos"}
-        mensagem_json = json.dumps(mensagem).encode('utf-8')
-        try:
-            client_sock.sendall(mensagem_json)
-            client_sock.settimeout(None)
-            r_json = client_sock.recv(1024)
-            r_json=r_json.decode('utf-8')
-            r_json=json.loads(r_json)
-            #o que eu espero receber aqui: {"dispositivos":[{"nome":"lampada","id":"01"},{"nome":"","id":""},{"nome":"","id":""},{"nome":"","id":""}]}
-            dispositivo_escolhido , id_dispositivo_escolhido = lista_dispositivos(r_json) #retorna o nome e id do dispositivo escolhida
-            if(dispositivo_escolhido!="" and id_dispositivo_escolhido!=""):
-                os.system('cls')
-                acao_escolhida=lista_opcoes_de_acoes()# retorna a ação escolhida pelo usuário: renomear (dispositivo), status(ver o status), função (chamar uma função)
 
-                if acao_escolhida=='função':
-                    os.system('cls')
-                    mensagem = {"comando":"funcionalidades","dispositivo":{"nome":f"{dispositivo_escolhido}","id":f"{id_dispositivo_escolhido}"}}
-                    mensagem_json = json.dumps(mensagem).encode('utf-8')
-                    client_sock.sendall(mensagem_json)
-                    client_sock.settimeout(None)
-                    r_json = client_sock.recv(1024)
-                    r_json=r_json.decode('utf-8')
-                    #o que eu espero receber aqui:{"funcionalidades":[{"nome":"ligar/desligar","parametros":[{"nome":"","tipo":"",...}]} , {"nome":"brilho","parametros":[{"nome":"","tipo":"",...}]},...}
-                    r_json=json.loads(r_json)            
-                    funcionalidade_escolhida ,lista_de_parametros_preenchida =listar_funcionalidades(r_json)#retornar o nome da funcionalidade escolhida e uma lista de parâmetros preenchidos para aquela funcionalidade
-                    while (funcionalidade_escolhida=="" and lista_de_parametros_preenchida==""):
-                        os.system('cls')
-                        print("Digite uma opção válida")
-                        funcionalidade_escolhida ,lista_de_parametros_preenchida =listar_funcionalidades(r_json)
-                    if funcionalidade_escolhida!='-1':  #se o dispositivo se desconectar ele é retirado da lista de funcionalidades e funcionalidade_escolhida recebe -1  
-                        os.system('cls')
-                        mensagem = {"comando":"função","dispositivo":{"nome":f"{dispositivo_escolhido}","id":f"{id_dispositivo_escolhido}"},"funcionalidade":f"{funcionalidade_escolhida}","parametros":lista_de_parametros_preenchida}
-                        mensagem_json = json.dumps(mensagem).encode('utf-8')
-                        client_sock.sendall(mensagem_json)
-                        client_sock.settimeout(None)
-                        r_json = client_sock.recv(1024)
-                        r_json=r_json.decode('utf-8')
-                        r_json=json.loads(r_json)
-                        #######verificar se o retorno do gateway não é uma mensagem de erro porque o dispositivo ficou off line
-                        if r_json.get('tipo')=='erro':
-                            print(r_json.get('erro'))
-                        else:    
-                            apresenta_status(r_json) 
-                            input()
-                            os.system('cls')
-                    else:        
-                        print("o dispositivo saiu do grupo")
-                elif acao_escolhida=='status':
-                    os.system('cls')
-                    mensagem = {"comando":"status","dispositivo":{"nome":f"{dispositivo_escolhido}","id":f"{id_dispositivo_escolhido}"}}
-                    mensagem_json = json.dumps(mensagem).encode('utf-8')
-                    client_sock.sendall(mensagem_json)
-                    client_sock.settimeout(None)
-                    r_json = client_sock.recv(1024)
-                    r_json=r_json.decode('utf-8')
-                    r_json=json.loads(r_json)
-                    #######verificar se o retorno do gateway não é uma mensagem de erro porque o dispositivo ficou off line
-                    if r_json.get('tipo')=='erro':
-                        print(r_json.get('erro'))
-                    else:    
-                        apresenta_status(r_json) 
-                        input()
-                        os.system('cls')
-                
-                elif acao_escolhida=='renomear':
-                    os.system('cls')
-                    novo_id_escolhido=input("Digite o novo id para o dispositivo escolhido:")
-                    mensagem = {"comando":"renomear","dispositivo":{"nome":f"{dispositivo_escolhido}","id":f"{id_dispositivo_escolhido}"},"novo_id":f"{novo_id_escolhido}"}
-                    mensagem_json = json.dumps(mensagem).encode('utf-8')
-                    client_sock.sendall(mensagem_json)
-                    client_sock.settimeout(None)
-                    r_json = client_sock.recv(1024)
-                    r_json=r_json.decode('utf-8')
-                    r_json=json.loads(r_json)
-                    #######verificar se o retorno do gateway não é uma mensagem de erro porque o dispositivo ficou off line
-                    if r_json.get('tipo')=='erro':
-                        print(r_json.get('erro'))
-                    else:    
-                        apresenta_status(r_json) 
-                        input()
-                        os.system('cls')
-                                  
-                        
-        except:
-            print("Falha ao enviar mensagem para o gateway")
-            print("programa encerrando...")
-            time.sleep(5) 
-            break
-                        
+    while True:
+        os.system('cls')
+        dispositivos = enviar_e_receber(client_sock, {"comando": "dispositivos"})
+        dispositivo, id_dispositivo = lista_dispositivos(dispositivos)
+
+        if not dispositivo:
+            continue
+
+        acao = lista_opcoes_de_acoes()
+
+        if acao == "função":
+            funcionalidades = enviar_e_receber(client_sock, {"comando": "funcionalidades", "dispositivo": {"nome": dispositivo, "id": id_dispositivo}})
+            func, parametros = listar_funcionalidades(funcionalidades)
+
+            if func != "-1":
+                mensagem = {"comando": "função", "dispositivo": {"nome": dispositivo, "id": id_dispositivo}, "funcionalidade": func, "parametros": parametros}
+                resposta = enviar_e_receber(client_sock, mensagem)
+                apresenta_status(resposta)
+
+        elif acao == "status":
+            mensagem = {"comando": "status", "dispositivo": {"nome": dispositivo, "id": id_dispositivo}}
+            resposta = enviar_e_receber(client_sock, mensagem)
+            apresenta_status(resposta)
+
+        elif acao == "renomear":
+            novo_id = input("Digite o novo ID para o dispositivo: ")
+            mensagem = {"comando": "renomear", "dispositivo": {"nome": dispositivo, "id": id_dispositivo}, "novo_id": novo_id}
+            resposta = enviar_e_receber(client_sock, mensagem)
+            apresenta_status(resposta)
+
+        else:
+            print("Encerrando o programa...")
+            break  # Sai do loop principal
 
     client_sock.close()
-    return
-        
-if __name__=="__main__":
-    main()   
+
+
+if __name__ == "__main__":
+    main()
