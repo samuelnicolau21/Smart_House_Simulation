@@ -2,8 +2,7 @@ import socket
 import struct
 import json
 import os
-
-
+import threading
 
 MULTICAST_GROUP = '224.1.1.2'
 MULTCAST_PORT = 5007
@@ -15,12 +14,13 @@ LAMPADA_IP=''
 LAMPADA_PORT=0
 
 HEARTBEAT_PORT=0
+GATEWAY_HEARTBEAT_PORT=0
 
 LAMP_ID = "lampada-123"
 estado_da_lampada='desligado'
 cor_da_lampada ='branco'
 luminosidade = 50
-
+tamanho_lista_no_gateway=5
 
 def entrar_no_grupo(sock, grp):
     grupo = socket.inet_aton(grp)
@@ -28,7 +28,8 @@ def entrar_no_grupo(sock, grp):
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
 def iniciar_lampada():
-    global GATEWAY_IP,GATEWAY_PORT,LAMPADA_PORT,LAMP_IP,LAMP_ID,HEARTBEAT_PORT
+    global GATEWAY_IP,GATEWAY_PORT,LAMPADA_PORT,LAMPADA_IP,LAMP_ID,HEARTBEAT_PORT,GATEWAY_HEARTBEAT_PORT
+    
     # Criando e configurando um socket para o multicast
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -39,37 +40,46 @@ def iniciar_lampada():
     sock_lampada = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_lampada.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock_lampada.bind(('', 0))
-    
     LAMPADA_IP,LAMPADA_PORT=sock_lampada.getsockname()
     LAMPADA_IP = socket.gethostbyname(socket.gethostname())
-    
+        
     #criando e configurando um socket para o heartbeat
     sock_heartbeat = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_heartbeat.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock_heartbeat.bind(('', 0))
     LAMPADA_IP,HEARTBEAT_PORT=sock_heartbeat.getsockname()
-    
+    LAMPADA_IP = socket.gethostbyname(socket.gethostname())
     
     print(f"Lâmpada {LAMP_ID} escutando no endereço multicast {MULTICAST_GROUP}:{MULTCAST_PORT}")
-    while True:
-        dados, endereco = sock.recvfrom(1024)
-        mensagem_json = json.loads(dados.decode('utf-8'))
-        
-        print(f"Mensagem recebida de {endereco}: {mensagem_json}")
-        if mensagem_json.get("comando") == "descobrir":
-            resposta_json = {"tipo":"descoberta","nome":"lampada","id": LAMP_ID,"status": "pronto","endereco":[f"{LAMPADA_IP}",f"{LAMPADA_PORT}"],"funcionalidades": [ {"nome":"ligar/desligar","parametros":[]},{"nome":"brilho","parametros":[{"nome":"valor do brilho","tipo":"int"}]},{"nome":"cor","parametros":[{"nome":"cor da lâmpada","tipo":"vermelho,verde,amarelo,azul,branco,roxo"}]}]}
-            endereco_completo_do_gateway=mensagem_json.get("enderecoGateway")
-            GATEWAY_IP, GATEWAY_PORT = endereco_completo_do_gateway
-            GATEWAY_PORT = int(GATEWAY_PORT)
-            sock.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_PORT))
-            print(f"Respondendo ao gateway {endereco_completo_do_gateway}")
-            break
     
-    #ouvindo_multicast(sock)
-    aguardando_comandos(sock_lampada)      
+    ouvindo_multicast(sock)
+    
+    t_ouvir_heartbeat = threading.Thread(target= ouvindo_heartbeat,args=(sock_heartbeat,sock))
+    t_ouvir_heartbeat.start()
 
+    aguardando_comandos(sock_lampada)
+    
+    t_ouvir_heartbeat.join()
+
+def ouvindo_heartbeat(sock_heartbeat,sock):
+    global GATEWAY_IP,GATEWAY_PORT,LAMPADA_PORT,LAMPADA_IP,LAMP_ID,HEARTBEAT_PORT,GATEWAY_HEARTBEAT_PORT,tamanho_lista_no_gateway
+    while True:
+        try:
+            sock_heartbeat.settimeout(tamanho_lista_no_gateway)
+            dados, endereco = sock_heartbeat.recvfrom(1024)
+            mensagem_json = json.loads(dados.decode('utf-8'))
+            
+            if mensagem_json.get("comando") == "heartbeat":
+                tamanho_lista_no_gateway=5 + ( 5 * ( int(mensagem_json.get("tamanho_lista")) ) )
+                resposta_json = {"tipo":"heartbeat","heartbeat_port":f"{HEARTBEAT_PORT}"}
+                GATEWAY_HEARTBEAT_PORT=int(GATEWAY_HEARTBEAT_PORT)
+                sock_heartbeat.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_HEARTBEAT_PORT))
+
+        except TimeoutError:
+                ouvindo_multicast(sock)
+                        
 def ouvindo_multicast(sock):
-    global GATEWAY_IP,GATEWAY_PORT,LAMPADA_PORT,LAMP_IP,LAMP_ID,HEARTBEAT_PORT
+    global GATEWAY_IP,GATEWAY_PORT,LAMPADA_PORT,LAMP_ID,LAMPADA_IP,HEARTBEAT_PORT,GATEWAY_HEARTBEAT_PORT
     print(f"Lâmpada {LAMP_ID} escutando no endereço multicast {MULTICAST_GROUP}:{MULTCAST_PORT}")
     while True:
         dados, endereco = sock.recvfrom(1024)
@@ -77,10 +87,11 @@ def ouvindo_multicast(sock):
         
         print(f"Mensagem recebida de {endereco}: {mensagem_json}")
         if mensagem_json.get("comando") == "descobrir":
-            resposta_json = {"tipo":"descoberta","nome":"lampada","id": LAMP_ID,"status": "pronto","endereco":[f"{LAMPADA_IP}",f"{LAMPADA_PORT}"],"funcionalidades": [ {"nome":"ligar/desligar","parametros":[]},{"nome":"brilho","parametros":[{"nome":"valor do brilho","tipo":"int"}]},{"nome":"cor","parametros":[{"nome":"cor da lâmpada","tipo":"vermelho,verde,amarelo,azul,branco,roxo"}]}]}
+            resposta_json = {"tipo":"descoberta","nome":"lampada","id": LAMP_ID,"status": "pronto","endereco":[f"{LAMPADA_IP}",f"{LAMPADA_PORT}"],"heartbeat_port":f"{HEARTBEAT_PORT}","funcionalidades": [ {"nome":"ligar/desligar","parametros":[]},{"nome":"brilho","parametros":[{"nome":"valor do brilho","tipo":"int"}]},{"nome":"cor","parametros":[{"nome":"cor da lâmpada","tipo":"vermelho,verde,amarelo,azul,branco,roxo"}]}]}
             endereco_completo_do_gateway=mensagem_json.get("enderecoGateway")
             GATEWAY_IP, GATEWAY_PORT = endereco_completo_do_gateway
             GATEWAY_PORT = int(GATEWAY_PORT)
+            GATEWAY_HEARTBEAT_PORT=mensagem_json.get("gateway_heartbeat_port")
             sock.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP,GATEWAY_PORT))
             print(f"Respondendo ao gateway {endereco_completo_do_gateway}")
             break

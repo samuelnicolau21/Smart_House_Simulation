@@ -1,5 +1,4 @@
 import socket
-import struct
 import json
 import os
 import time
@@ -33,6 +32,7 @@ def lista_dispositivos(json_lista_dispositivos):
             print("Você digitou uma opção inválida")
             return "",""
         return list[x]["nome"],list[x]["id"]
+    
 def lista_opcoes_de_acoes():
     print("1) Chamar uma função do dispositivo selecionado")
     print("2) Renomear o id do dispositivo selecionado")
@@ -46,10 +46,14 @@ def lista_opcoes_de_acoes():
         elif x=='2':
             return "renomear"
         elif x=='3':
-            return "status"        
+            return "status"  
+              
 def listar_funcionalidades(json_lista_funcionalidades):
     list=json_lista_funcionalidades["funcionalidades"]
-    tam=len(list) 
+    tam=len(list)
+    if tam is None or tam==0:
+        print("a lista de funcionalidades para esse dispositivo está vaiza pois o dispositivo se desconectou")
+        return "-1","" 
     i=0
     print("Selecione uma funcionalidade\n")
     for i in range(tam):
@@ -63,6 +67,7 @@ def listar_funcionalidades(json_lista_funcionalidades):
         print("Você digitou uma opção inválida")
         time.sleep(2)
         return "",""
+        
     
     nome_da_funcionalidade_escolhida=list[x]["nome"]
     list_2=list[x]["parametros"]
@@ -94,8 +99,10 @@ def listar_funcionalidades(json_lista_funcionalidades):
             print("Você digitou uma valor inválido para o parâmetro da funcionalidade escolhida")
             time.sleep(2)
             return "",""
-        parametros.append(x)    
+        parametros.append(x)  
+    
     return nome_da_funcionalidade_escolhida, parametros
+
 def apresenta_status(json_status):
     list=json_status["status"]
     for tupla in list:
@@ -155,23 +162,24 @@ def main():
                         os.system('cls')
                         print("Digite uma opção válida")
                         funcionalidade_escolhida ,lista_de_parametros_preenchida =listar_funcionalidades(r_json)
-                        
-                    os.system('cls')
-                    mensagem = {"comando":"função","dispositivo":{"nome":f"{dispositivo_escolhido}","id":f"{id_dispositivo_escolhido}"},"funcionalidade":f"{funcionalidade_escolhida}","parametros":lista_de_parametros_preenchida}
-                    mensagem_json = json.dumps(mensagem).encode('utf-8')
-                    client_sock.sendall(mensagem_json)
-                    client_sock.settimeout(None)
-                    r_json = client_sock.recv(1024)
-                    r_json=r_json.decode('utf-8')
-                    r_json=json.loads(r_json)
-                    #######verificar se o retorno do gateway não é uma mensagem de erro porque o dispositivo ficou off line
-                    if r_json.get('tipo')=='erro':
-                        print(r_json.get('erro'))
-                    else:    
-                        apresenta_status(r_json) 
-                        input()
+                    if funcionalidade_escolhida!='-1':  #se o dispositivo se desconectar ele é retirado da lista de funcionalidades e funcionalidade_escolhida recebe -1  
                         os.system('cls')
-                    
+                        mensagem = {"comando":"função","dispositivo":{"nome":f"{dispositivo_escolhido}","id":f"{id_dispositivo_escolhido}"},"funcionalidade":f"{funcionalidade_escolhida}","parametros":lista_de_parametros_preenchida}
+                        mensagem_json = json.dumps(mensagem).encode('utf-8')
+                        client_sock.sendall(mensagem_json)
+                        client_sock.settimeout(None)
+                        r_json = client_sock.recv(1024)
+                        r_json=r_json.decode('utf-8')
+                        r_json=json.loads(r_json)
+                        #######verificar se o retorno do gateway não é uma mensagem de erro porque o dispositivo ficou off line
+                        if r_json.get('tipo')=='erro':
+                            print(r_json.get('erro'))
+                        else:    
+                            apresenta_status(r_json) 
+                            input()
+                            os.system('cls')
+                    else:        
+                        print("o dispositivo saiu do grupo")
                 elif acao_escolhida=='status':
                     os.system('cls')
                     mensagem = {"comando":"status","dispositivo":{"nome":f"{dispositivo_escolhido}","id":f"{id_dispositivo_escolhido}"}}
