@@ -58,10 +58,12 @@ def abrir_janela_funcoes(dispositivo, id_dispositivo):
         if funcionalidade_selecionada["parametros"]:
             parametros = simpledialog.askstring(
                 "Parâmetros",
-                f"Digite os parâmetros para '{funcionalidade_selecionada['nome']}' (ex.: verde, azul):"
+                f"Digite os parâmetros para '{funcionalidade_selecionada['nome']}'"
             )
+            print(f"Parâmetro capturado: {parametros}")
             if parametros is None:
                 return  # Cancelado pelo usuário
+            parametros = [parametros.strip()] 
         else:
             parametros = None
 
@@ -74,7 +76,13 @@ def abrir_janela_funcoes(dispositivo, id_dispositivo):
         }
 
         resposta = enviar_e_receber(client_sock, mensagem)
-        messagebox.showinfo("Resposta", f"Resposta do servidor: {resposta}")
+        informacoes = ""
+        for item in resposta['status']:
+            for chave, valor in item.items():
+                informacoes += f"{chave}: {valor}\n"
+
+        # Exibindo a mensagem no MessageBox
+        messagebox.showinfo("Resposta", f"Resposta do servidor:\n{informacoes}")
         janela_funcoes.destroy()
 
     tk.Button(
@@ -112,7 +120,14 @@ def interagir_com_dispositivo():
             elif acao == "Status":
                 mensagem = {"comando": "status", "dispositivo": {"nome": dispositivo, "id": id_dispositivo}}
                 resposta = enviar_e_receber(client_sock, mensagem)
-                messagebox.showinfo("Status", f"Status do dispositivo: {resposta}")
+
+                informacoes = ""
+                for item in resposta['status']:
+                    for chave, valor in item.items():
+                        informacoes += f"{chave}: {valor}\n"
+
+                # Exibindo a mensagem no MessageBox
+                messagebox.showinfo("Status", f"Status do dispositivo:\n{informacoes}")
 
             elif acao == "Renomear":
                 novo_id = simpledialog.askstring("Renomear", "Digite o novo ID para o dispositivo:")
@@ -124,7 +139,13 @@ def interagir_com_dispositivo():
                         "novo_id": novo_id
                     }
                     resposta = enviar_e_receber(client_sock, mensagem)
-                    messagebox.showinfo("Resposta", f"Resposta do servidor: {resposta}")
+                    informacoes = ""
+                    for item in resposta['status']:
+                        for chave, valor in item.items():
+                            informacoes += f"{chave}: {valor}\n"
+
+                    # Exibindo a mensagem no MessageBox
+                    messagebox.showinfo("Resposta", f"Resposta do servidor:\n{informacoes}")
 
             janela_opcoes.destroy()
 
