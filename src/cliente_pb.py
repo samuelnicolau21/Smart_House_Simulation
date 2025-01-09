@@ -6,7 +6,7 @@ import mensagens_pb2
 
 
 # Configurações do Gateway e Cliente
-GATEWAY_IP = '192.168.223.216'
+GATEWAY_IP = 'localhost'
 GATEWAY_PORT = 5010
 CLIENT_PORT = 5009
 CLIENT_IP = ''
