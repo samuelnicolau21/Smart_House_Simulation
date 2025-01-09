@@ -4,7 +4,7 @@ import json
 import os
 import threading
 
-MULTICAST_GROUP = '224.1.1.2'
+MULTICAST_GROUP = '224.1.1.5'
 MULTCAST_PORT = 5007
 
 GATEWAY_IP=''
@@ -87,7 +87,17 @@ def ouvindo_multicast(sock):
         
         print(f"Mensagem recebida de {endereco}: {mensagem_json}")
         if mensagem_json.get("comando") == "descobrir":
-            resposta_json = {"tipo":"descoberta","nome":"lampada","id": LAMP_ID,"status": "pronto","endereco":[f"{LAMPADA_IP}",f"{LAMPADA_PORT}"],"heartbeat_port":f"{HEARTBEAT_PORT}","funcionalidades": [ {"nome":"ligar/desligar","parametros":[]},{"nome":"brilho","parametros":[{"nome":"valor do brilho","tipo":"int"}]},{"nome":"cor","parametros":[{"nome":"cor da lâmpada","tipo":"vermelho,verde,amarelo,azul,branco,roxo"}]}]}
+            resposta_json = {"tipo":"descoberta",
+                             "nome":"lampada",
+                             "id": LAMP_ID,
+                             "status": "pronto",
+                             "endereco":[f"{LAMPADA_IP}",f"{LAMPADA_PORT}"],
+                             "heartbeat_port":f"{HEARTBEAT_PORT}",
+                             "funcionalidades": [ {"nome":"ligar/desligar","parametros":[]},
+                                                 {"nome":"brilho","parametros":[{"nome":"valor do brilho","tipo":"int"}]},
+                                                 {"nome":"cor","parametros":[{"nome":"cor da lâmpada","tipo":"vermelho,verde,amarelo,azul,branco,roxo"}]}
+                                                ]
+                             }
             endereco_completo_do_gateway=mensagem_json.get("enderecoGateway")
             GATEWAY_IP, GATEWAY_PORT = endereco_completo_do_gateway
             GATEWAY_PORT = int(GATEWAY_PORT)

@@ -3,11 +3,14 @@ import json
 import threading
 import os
 import time
+import mensagens_pb2
 
-MULTICAST_GROUP = '224.1.1.2' #IP usado para onde as mensagens do multicast vão 
+
+
+MULTICAST_GROUP = '224.1.1.5' #IP usado para onde as mensagens do multicast vão 
 MULTICAST_PORT = 5007 # porta usada para enviar as mensagens do multicast (UDP)
 
-GATEWAY_IP='192.168.1.171' #ip do gateway para onde os dispositivos e clientes miram
+GATEWAY_IP='192.168.223.216' #ip do gateway para onde os dispositivos e clientes miram
 GATEWAY_PORT=5008 #porta para onde os dispositivos enviam suas mensagens que não são heartbeat (UDP)
 
 GATEWAY_CLIENT_PORT=5010 # porta para onde o cliente envia mensagens para o gateway (TCP)
@@ -67,6 +70,7 @@ class Dispositivos:
             # Adiciona um novo dicionário à lista
             dicionario.append({"nome": self.dispositivos[i].nome,"id": self.dispositivos[i].id})
         return dicionario
+
     def lista_de_funcionalidades_e_seus_parametros(self,nome_do_dispositivo_escolhido,id_do_dispositivo_escolhido):
         nome=nome_do_dispositivo_escolhido
         id=id_do_dispositivo_escolhido
@@ -79,8 +83,7 @@ class Dispositivos:
                     tam_2=len(self.dispositivos[i].funcionalidades)
                     j=0
                     for j in range(tam_2):
-                        dicionario.append({"nome": self.dispositivos[i].funcionalidades[j]["nome"],"parametros":self.dispositivos[i].funcionalidades[j]["parametros"]})
-                 
+                        dicionario.append({"nome": self.dispositivos[i].funcionalidades[j].nome,"parametros":self.dispositivos[i].funcionalidades[j].parametros})       
         return dicionario
     def ip_e_porta(self,nome,id_):
         tam=len(self.dispositivos)
@@ -93,12 +96,12 @@ class Dispositivos:
         i=0
         for i in range(tam):  
             if (self.dispositivos[i].nome==nome and self.dispositivos[i].id==id_original):
-                    self.dispositivos[i].id= novo_id
-    def aumentar_heartbeat(self,r_json):
+                    self.dispositivos[i].id=novo_id
+    def aumentar_heartbeat(self,heartbeat_proto):
         tam=len(self.dispositivos)
         i=0
         for i in range(tam):
-            if self.dispositivos[i].heartbeat_port==r_json["heartbeat_port"]:
+            if self.dispositivos[i].heartbeat_port==heartbeat_proto.heartbeat_port:
                 self.dispositivos[i].heartbeat=self.dispositivos[i].heartbeat+1
     def diminuir_heartbeat(self):
         tam=len(self.dispositivos)
@@ -110,8 +113,34 @@ class Dispositivos:
                 print(f"Dispositivo com heartbeat = {self.dispositivos[i].heartbeat} foi tirado da lista")
                 self.dispositivos.pop(i)
                 return
-                                    
-ldd=Dispositivos()
+ldd=Dispositivos() 
+def preencher_dispositivos(destino, lista_dispositivos):
+    if len(lista_dispositivos)==0:
+        novo_dispositivo = destino.add()
+        novo_dispositivo.nome = "vazia"
+        novo_dispositivo.id = "vazia"  
+        return
+    for dispositivo in lista_dispositivos:
+        novo_dispositivo = destino.add()
+        novo_dispositivo.nome = dispositivo["nome"]
+        novo_dispositivo.id = dispositivo["id"]                                    
+
+def preencher_funcionalidades_proto(lista_funcionalidades):
+    funcionalidades_proto = mensagens_pb2.GatewayLF()
+    if len(lista_funcionalidades)==0:
+        funcionalidade = funcionalidades_proto.funcionalidades.add()
+        funcionalidade.nome = "vazia"
+        return funcionalidades_proto
+    for func in lista_funcionalidades:
+        funcionalidade = funcionalidades_proto.funcionalidades.add()
+        funcionalidade.nome = func["nome"]
+
+        for param in func["parametros"]:
+            parametro = funcionalidade.parametros.add()
+            parametro.nome = param.nome
+            parametro.tipo = param.tipo
+    
+    return funcionalidades_proto
 
 def iniciar_gateway():
     # Criar o socket UDP
@@ -151,13 +180,8 @@ def iniciar_gateway():
     t_escuta_cliente.join()
   
 def enviar_multicast(sock):
-    mensagem_json = {
-        "comando": "descobrir",
-        "enderecoGateway":[f"{GATEWAY_IP}",f"{GATEWAY_PORT}"],
-        "gateway_heartbeat_port":f"{GATEWAY_HEARTBEAT_PORT}"
-    }
-    sock.sendto(json.dumps(mensagem_json).encode('utf-8'), (MULTICAST_GROUP, MULTICAST_PORT))
-    #print(f"Mensagem de descoberta enviada para {MULTICAST_GROUP}:{MULTICAST_PORT}")
+    mensagem=mensagens_pb2.GatewayM(comando='descobrir',enderecoGateway=[f"{GATEWAY_IP}",f"{GATEWAY_PORT}"],gateway_heartbeat_port=f"{GATEWAY_HEARTBEAT_PORT}")
+    sock.sendto(mensagem.SerializeToString(), (MULTICAST_GROUP, MULTICAST_PORT))
 
 def heartbeat(sock_gateway_heartbeat):
     while True:
@@ -166,44 +190,41 @@ def heartbeat(sock_gateway_heartbeat):
         tam=len(ldd.dispositivos)
         if tam is None:
             tam=0
-        mensagem_json = {
-            "comando": "heartbeat",
-            "gateway_heartbeat_port":f"{GATEWAY_HEARTBEAT_PORT}",
-            "tamanho_lista":f"{tam}"
-            }
-        i=0
-        for i in range(tam):
-            #print("enviando heartbeat")       
-            sock_gateway_heartbeat.sendto(json.dumps(mensagem_json).encode('utf-8'), (ldd.dispositivos[i].ip,int(ldd.dispositivos[i].heartbeat_port)))
-            try:
-                sock_gateway_heartbeat.settimeout(5)
-                dados, endereco = sock_gateway_heartbeat.recvfrom(1024)
-                r_json = json.loads(dados.decode('utf-8'))
-                #o que eu espero receber:{"tipo":"heartbeat","heart_beat_port":f"{HEARTBEAT_PORT}"}
-                #print("aumentando heartbeat")
-                ldd.aumentar_heartbeat(r_json)
-            except:
-                pass    
+        else:
+            heartbeat= mensagens_pb2.GatewayHB()
+            heartbeat.comando="heartbeat"
+            heartbeat.gateway_heartbeat_port=f"{GATEWAY_HEARTBEAT_PORT}"
+            heartbeat.tamanho_lista=f"{tam}"
+            i=0
+            for i in range(tam):    
+                sock_gateway_heartbeat.sendto(heartbeat.SerializeToString(), (ldd.dispositivos[i].ip,int(ldd.dispositivos[i].heartbeat_port)))
+                
+                try:
+                    sock_gateway_heartbeat.settimeout(5)
+                    dados, endereco = sock_gateway_heartbeat.recvfrom(1024)
+                    heartbeatR=mensagens_pb2.DispositivoHB()
+                    heartbeatR.ParseFromString(dados)
+                    ldd.aumentar_heartbeat(heartbeatR)
+                except Exception as e:
+                    print(f"erro {e}")
+                    pass    
  
 def adcionar_novos_dispositivos(sock_gateway,sock_multicast):
     global ldd
-    #print(f"Gateway escutando respostas no endereço {IP_GATEWAY}:{PORT}")
     while True:
         if not thread_pausada:
             with lock:
-                #print("enviando multicast")
                 enviar_multicast(sock_multicast)
                 sock_gateway.settimeout(5)
                 try:
                     dados, endereco = sock_gateway.recvfrom(1024)
-                    r_json = json.loads(dados.decode('utf-8'))
-                    if(r_json.get("tipo")=='descoberta'):
-                        #print(f"Resposta recebida de {endereco}: {r_json}")
-                        ip,porta=r_json.get("endereco")
-                        ldd.dispositivos.append( Dispositivo(r_json.get("nome"),r_json.get("id"),ip,porta,r_json.get("funcionalidades"),r_json.get("heartbeat_port")) )
-                        print(f"Dispositivo:{r_json.get('nome')} de ID:{r_json.get('id')} e ip:{ip} foi adcionado a lista de dispositivos\n")
+                    mensagem=mensagens_pb2.DispositivoR()
+                    mensagem.ParseFromString(dados)
+                    if mensagem.tipo=='descoberta':   
+                        ip,porta=mensagem.endereco
+                        ldd.dispositivos.append( Dispositivo(mensagem.nome,mensagem.id,ip,porta,mensagem.funcionalidades,mensagem.heartbeat_port) )
+                        print(f"Dispositivo:{mensagem.nome} de ID:{mensagem.id} e ip:{ip} foi adcionado a lista de dispositivos\n")
                 except:
-                        #print("Tempo limite atingido. Nenhuma resposta recebida.") 
                         pass
 
 def escuta_cliente(sock_gateway):
@@ -226,96 +247,113 @@ def escuta_cliente(sock_gateway):
     while True:
         try:
             # ouvir o cliente 
-            dados = client_sock.recv(1024).decode('utf-8')
-            r_json = json.loads(dados)
+            dados = client_sock.recv(1024)
+            comando = mensagens_pb2.ClienteC()
+            comando.ParseFromString(dados)
             
-            if r_json.get("comando")=="dispositivos":
-                r_json={"dispositivos":ldd.lista_nome_id_dos_dispositivos()}
-                client_sock.sendall(json.dumps(r_json).encode('utf-8'))
-            
-            elif r_json.get("comando")=="funcionalidades":
+            if comando.comando=="dispositivos":
+                dispositivos=mensagens_pb2.GatewayLD()
+                preencher_dispositivos(dispositivos.dispositivos,ldd.lista_nome_id_dos_dispositivos() )
+                client_sock.sendall(dispositivos.SerializeToString())
+                
+            elif comando.comando=="funcionalidades":
                 try:
-                    nome_do_dispositivo_escolhido=r_json.get("dispositivo",{}).get("nome")
-                    id_do_dispositivo_escolhido=r_json.get("dispositivo",{}).get("id")
-                    ldd.lista_de_funcionalidades_e_seus_parametros(nome_do_dispositivo_escolhido,id_do_dispositivo_escolhido)
-                    r_json = {"funcionalidades":ldd.lista_de_funcionalidades_e_seus_parametros(nome_do_dispositivo_escolhido,id_do_dispositivo_escolhido)}
-                    client_sock.sendall(json.dumps(r_json).encode('utf-8'))
-                except:
+                    nome_do_dispositivo_escolhido=comando.dispositivo.nome
+                    id_do_dispositivo_escolhido=comando.dispositivo.id
+                    lista_funcionalidades=ldd.lista_de_funcionalidades_e_seus_parametros(nome_do_dispositivo_escolhido,id_do_dispositivo_escolhido)
+                    funcionalidades=mensagens_pb2.GatewayLF()
+                    funcionalidades=preencher_funcionalidades_proto(lista_funcionalidades)
+                    client_sock.sendall(funcionalidades.SerializeToString())
+                    
+                except Exception as e:
+                    print(f"Erro:{e}")
                     print("Algo deu errado ao receber a lista tentar enviar a lista de funcionalidades do dispositivo solicitado")
-                    r_json = {"funcionalidades":[ { "nome":"", "parametros": [] } ] }
-                    print(f"Enviando uma lista de funcionalidades vazia:{r_json}")
-                    client_sock.sendall(json.dumps(r_json).encode('utf-8')) 
+                    funcionalidades=mensagens_pb2.GatewayLF()
+                    func=funcionalidades.funcionalidades.add()
+                    func.nome="vazia"
+                    print(f"Enviando uma lista de funcionalidades vazia:{funcionalidades}")
+                    client_sock.sendall(funcionalidades.SerializeToString())
             
-            elif r_json.get("comando")=="função":
+            elif comando.comando=="função":
                 thread_pausada=True
                 with lock:
                     try:
-                        ip,porta=ldd.ip_e_porta(r_json["dispositivo"]["nome"],r_json["dispositivo"]["id"])
-                        parametros=r_json.get('parametros')
-                        r_json={"comando":f"{r_json['funcionalidade']}","parametros":parametros}
-                        print("vou tentar enviar mensagem para o dispositivo agora")
-                        sock_gateway.sendto(json.dumps(r_json).encode('utf-8'), (ip,int(porta)))
+                        ip,porta=ldd.ip_e_porta(comando.dispositivo.nome,comando.dispositivo.id)
+                        comando.comando=comando.funcionalidade
+                        sock_gateway.sendto(comando.SerializeToString(), (ip,int(porta)))
                         print("mensagem enviada para o dispositivo")
                         sock_gateway.settimeout(5)
                         dados, endereco = sock_gateway.recvfrom(1024)
-                        r_json = json.loads(dados.decode('utf-8'))
-                        if r_json["status"][0]["tipo"]=='atualização':
-                            client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                        status = mensagens_pb2.DispositivoS()
+                        status.ParseFromString(dados)
+                        if status.status[0].valorDoStatus=='atualização':
+                            client_sock.sendall(status.SerializeToString())
                             thread_pausada=False
                             print("Deu certo fazer o envio e receber uma resposta do dispositivo")
-                    except:
+                    except Exception as e:
+                        print(f"Erro:{e}")
                         print("Tempo limite esgotado. Dispositivo não respondeu a solicitação.")  
                         thread_pausada=False
-                        r_json = {"tipo":"erro","erro":"O dispositivo ficou inacessível. Por gentileza, tente novamente mais tarde."}
-                        client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                        status = mensagens_pb2.DispositivoS()
+                        st=status.status.add()
+                        st.nomeDoStatus="erro"
+                        client_sock.sendall(status.SerializeToString())
 
             
-            elif r_json.get("comando")=="status":
+            elif comando.comando=="status":
                 thread_pausada=True    
                 with lock:
                     try:
-                        ip,porta=ldd.ip_e_porta(r_json["dispositivo"]["nome"],r_json["dispositivo"]["id"])
-                        r_json={"comando":"status"}
+                        ip,porta=ldd.ip_e_porta(comando.dispositivo.nome,comando.dispositivo.id)
                         print("vou tentar enviar mensagem para o dispositivo agora")                    
-                        sock_gateway.sendto(json.dumps(r_json).encode('utf-8'), (ip,int(porta)))
+                        sock_gateway.sendto(comando.SerializeToString(), (ip,int(porta)))
                         print("mensagem enviada para o dispositivo")
                         sock_gateway.settimeout(5)   
                         dados, endereco = sock_gateway.recvfrom(1024)
-                        r_json = json.loads(dados.decode('utf-8'))
-                        if r_json["status"][0]["tipo"]=='atualização':
-                            client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                        status=mensagens_pb2.DispositivoS()
+                        status.ParseFromString(dados)
+                        if status.status[0].valorDoStatus=='atualização':
+                            client_sock.sendall(status.SerializeToString())
                             thread_pausada=False
-                   # except socket.timeout:
-                    except:
+                            print("Deu certo fazer o envio e receber uma resposta do dispositivo")
+                    except Exception as e:
+                        print(f"Erro:{e}")
                         print("Tempo limite esgotado. Dispositivo não respondeu a solicitação.")  
-                        thread_pausada=False 
-                        r_json = {"tipo":"erro","erro":"O dispositivo ficou inacessível. Por gentileza, tente novamente mais tarde."}
-                        client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                        thread_pausada=False
+                        status = mensagens_pb2.DispositivoS()
+                        st=status.status.add()
+                        st.nomeDoStatus="erro"
+                        client_sock.sendall(status.SerializeToString())
                 
             
-            elif r_json.get("comando")=="renomear":
+            elif comando.comando=="renomear":
                 thread_pausada=True
                 with lock:
                     try:
-                        ldd.atualizar_id_dispositivo_gateway(r_json["dispositivo"]["nome"],r_json["dispositivo"]["id"],r_json["novo_id"])
-                        ip,porta=ldd.ip_e_porta(r_json["dispositivo"]["nome"],r_json["novo_id"])
+                        ldd.atualizar_id_dispositivo_gateway(comando.dispositivo.nome,comando.dispositivo.id,comando.novo_id)
+                        ip,porta=ldd.ip_e_porta(comando.dispositivo.nome,comando.novo_id)
                         print("enviando mensagem para o dispositivo")
-                        sock_gateway.sendto(json.dumps(r_json).encode('utf-8'), (ip,int(porta)))
+                        sock_gateway.sendto(comando.SerializeToString(), (ip,int(porta)))
                         print("mensagem enviada para o dispositivo")
                         sock_gateway.settimeout(5)
                         dados, endereco = sock_gateway.recvfrom(1024)
-                        r_json = json.loads(dados.decode('utf-8'))
-                        if r_json["status"][0]["tipo"]=='atualização':
-                            client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                        status=mensagens_pb2.DispositivoS()
+                        status.ParseFromString(dados)
+                        if status.status[0].valorDoStatus=='atualização':
+                            client_sock.sendall(status.SerializeToString())
                             thread_pausada=False
-                   # except socket.timeout:
-                    except:
+                            print("Deu certo fazer o envio e receber uma resposta do dispositivo")
+                    except Exception as e:
+                        print(f"Erro:{e}")
                         print("Tempo limite esgotado. Dispositivo não respondeu a solicitação.")  
                         thread_pausada=False
-                        r_json = {"tipo":"erro","erro":"O dispositivo ficou inacessível. Por gentileza, tente novamente mais tarde."}
-                        client_sock.sendall(json.dumps(r_json).encode('utf-8'))
+                        status = mensagens_pb2.DispositivoS()
+                        st=status.status.add()
+                        st.nomeDoStatus="erro"
+                        client_sock.sendall(status.SerializeToString())
     
-        except:
+        except Exception as e:
+            print(f"Ocorreu um erro: {e}")
             print("O cliente ficou inacessível")
             client_sock.close()
             print(f"Conexão com {client_endereco} encerrada.")

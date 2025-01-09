@@ -3,6 +3,8 @@ import struct
 import json
 import os
 import threading
+import random
+import time
 
 MULTICAST_GROUP = '224.1.1.2'
 MULTICAST_PORT = 5007
@@ -20,6 +22,7 @@ AC_ID = "arcondicionado-123"
 estado_ac = 'desligado'
 temperatura = 24
 modo = 'resfriar'  # Modos possíveis: resfriar, aquecer, ventilar
+temperatura_do_ambiente= 24 
 tamanho_lista_no_gateway=5
 
 def entrar_no_grupo(sock, grp):
@@ -53,10 +56,13 @@ def iniciar_ac():
     
     t_ouvir_heartbeat = threading.Thread(target= ouvindo_heartbeat,args=(sock_heartbeat,sock))
     t_ouvir_heartbeat.start()
+    t_oscilar_temperatura = threading.Thread(target= oscilar_temperatura)
+    t_oscilar_temperatura.start()
     
     aguardando_comandos(sock_ac)
 
     t_ouvir_heartbeat.join()
+    t_oscilar_temperatura.join()
     
 def ouvindo_heartbeat(sock_heartbeat,sock):
     global GATEWAY_IP, GATEWAY_PORT,AC_PORT,AC_IP,AC_ID,HEARTBEAT_PORT,GATEWAY_HEARTBEAT_PORT,tamanho_lista_no_gateway   
@@ -84,6 +90,7 @@ def ouvindo_multicast(sock):
         print(f"Mensagem recebida de {endereco}: {mensagem_json}")
         if mensagem_json.get("comando") == "descobrir":
             resposta_json = {"tipo": "descoberta","nome": "ar-condicionado","id": AC_ID,"status": "pronto","endereco": [f"{AC_IP}", f"{AC_PORT}"],"heartbeat_port":f"{HEARTBEAT_PORT}","funcionalidades": [{"nome": "ligar/desligar", "parametros": []},{"nome": "temperatura", "parametros": [{"nome": "valor", "tipo": "inteiro"}]},{"nome": "modo", "parametros": [{"nome": "modo de operação", "tipo": "resfriar,aquecer,ventilar"}]}]}
+            
             endereco_completo_do_gateway = mensagem_json.get("enderecoGateway")
             GATEWAY_IP, GATEWAY_PORT = endereco_completo_do_gateway
             GATEWAY_PORT = int(GATEWAY_PORT)
@@ -126,7 +133,7 @@ def aguardando_comandos(sock_ac):
 
 #funcionalidades do arcondicionado
 def ligar_desligar():
-    global estado_ac
+    global estado_ac,temperatura_do_ambiente
     estado_ac = 'ligado' if estado_ac == 'desligado' else 'desligado'
 
 def ajustar_temperatura(valor):
@@ -149,7 +156,7 @@ def enviar_status(sock_ac):
         "status": [
             {"tipo":"atualização"},{"nome":"Ar-condicionado"},
             {"id": AC_ID},{"estado": estado_ac},{"temperatura": temperatura},
-            {"modo": modo}]
+            {"modo": modo},{"temperatura do ambiente":temperatura_do_ambiente}]
         }
             
     sock_ac.sendto(json.dumps(resposta_json).encode('utf-8'), (GATEWAY_IP, GATEWAY_PORT))
@@ -161,6 +168,19 @@ def mostrar_status():
     print(f"estado:{estado_ac}")
     print(f"temperatura:{temperatura}")
     print(f"modo:{modo}")
+
+def oscilar_temperatura():
+    global temperatura, temperatura_do_ambiente
+    while True:
+        time.sleep(5)
+        taxa_de_oscilacao=(temperatura/100)
+        taxa_de_oscilacao = random.uniform(0, taxa_de_oscilacao)
+        aumentar_diminuir=random.randint(1,2)
+        if aumentar_diminuir==1:
+            temperatura_do_ambiente=temperatura_do_ambiente-taxa_de_oscilacao
+        else:
+            temperatura_do_ambiente=temperatura_do_ambiente+taxa_de_oscilacao
+    
 
 if __name__ == "__main__":
     print("Digite o nome do ar-condicionado:")

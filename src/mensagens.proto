@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+// Mensagem usada para enviar as características fundamentais de um dispostivo para o gateway no momento da descoberta
+message DispositivoR {
+  string tipo = 1;                      // "descoberta"
+  string nome = 2;                      // "lampada"
+  string id = 3;                        // LAMP_ID
+  string status = 4;                    // "pronto"
+  repeated string endereco = 5;         // ["LAMPADA_IP", "LAMPADA_PORT"]
+  string heartbeat_port = 6;            // HEARTBEAT_PORT
+  repeated Funcionalidade funcionalidades = 7; // Lista de funcionalidades
+}
+
+// Funcionalidade de um dispositivo
+message Funcionalidade {
+  string nome = 1;                      // Nome da funcionalidade
+  repeated Parametro parametros = 2;    // Lista de parâmetros para a funcionalidade
+}
+
+// Parâmetro de uma funcionalidade
+message Parametro {
+  string nome = 1;                      // Nome do parâmetro
+  string tipo = 2;                      // Tipo do parâmetro (ex. "int", "string", etc)
+}
+
+
+
+// Representa um dispositivo genérico
+message Dispositivo {
+  string nome = 1;                      // Nome do dispositivo
+  string id = 2;                        // ID do dispositivo
+}
+
+// Mensagem usada para enviar o multicast para os dispositivos 
+message GatewayM {
+  string comando = 1;                   // "descobrir"
+  repeated string enderecoGateway = 2;  // ["GATEWAY_IP", "GATEWAY_PORT"]
+  string gateway_heartbeat_port = 3;    // GATEWAY_HEARTBEAT_PORT
+}
+
+// Mensagem usada pra enviar comandos para o gateway 
+message ClienteC {
+  string comando = 1;                   // "função", "status", "renomear", etc
+  Dispositivo dispositivo = 2;          // Objeto de dispositivo
+  string funcionalidade = 3;            // Nome da funcionalidade
+  repeated Parametro parametros = 4;    // Parâmetros de funcionalidade
+  string novo_id = 5;                   // Novo ID, se houver (para "renomear")
+  repeated string parametrosEscolhidos = 6; // Lista de parâmetros preenchidos pelo cliente
+}
+
+
+//Mensagem usada para enviar a lista de dispositivos no Gateway para o Cliente
+message GatewayLD {
+	repeated Dispositivo dispositivos = 1; //lista de dispositivos nome e id
+}
+
+//Mensagem usada para enviar a lista de funcionalidades de um dispositivo escolhido no Gateway para o Cliente
+message GatewayLF {
+	repeated Funcionalidade funcionalidades =1; //lista de funcionalidades  nome e lista de parâmetros
+}
+
+
+//Mensagem para representar o status de um dispositivo
+message StatusDispositivo {
+  string nomeDoStatus = 1;               // Tipo da mensagem, ex: "atualização"
+  string valorDoStatus = 2;             // Nome do dispositivo, ex: "lampada"
+}
+
+//Mensagem para representar uma lista de status
+message DispositivoS {
+  repeated StatusDispositivo status = 2; // Lista de status do dispositivo
+}
+
+//Mensagem do heartbeat do Gateway para o dispositivo
+message GatewayHB{
+	string comando = 1;                 //"heartbeart"
+	string gateway_heartbeat_port = 2;  //GATEWAY_HEARTBEAT_PORT
+	string tamanho_lista= 3;            //tam
+}
+
+//Mensagem do heartbeat do Dispositivo para o Gateway
+message DispositivoHB{
+	string tipo = 1;                 
+	string heartbeat_port = 2;       
+	string tamanho_lista= 3;            
+}
+
+
+
