@@ -10,7 +10,7 @@ import mensagens_pb2
 MULTICAST_GROUP = '224.1.1.5' #IP usado para onde as mensagens do multicast vão 
 MULTICAST_PORT = 5007 # porta usada para enviar as mensagens do multicast (UDP)
 
-GATEWAY_IP='192.168.223.216' #ip do gateway para onde os dispositivos e clientes miram
+GATEWAY_IP='localhost' #ip do gateway para onde os dispositivos e clientes miram
 GATEWAY_PORT=5008 #porta para onde os dispositivos enviam suas mensagens que não são heartbeat (UDP)
 
 GATEWAY_CLIENT_PORT=5010 # porta para onde o cliente envia mensagens para o gateway (TCP)
